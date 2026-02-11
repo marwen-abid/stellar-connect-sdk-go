@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive KYC Flow</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        input[type="text"],
+        input[type="email"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus,
+        input[type="email"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+        .amount-display {
+            background-color: #f8f9fa;
+            padding: 10px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            color: #333;
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            font-size: 14px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-submit {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-submit:hover {
+            background-color: #0056b3;
+        }
+        .btn-cancel {
+            background-color: #e9ecef;
+            color: #333;
+        }
+        .btn-cancel:hover {
+            background-color: #dee2e6;
+        }
+        .error-message {
+            display: none;
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+        .success-message {
+            display: none;
+            background-color: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #c3e6cb;
+        }
+        input[disabled] {
+            background-color: #f8f9fa;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Interactive KYC Flow</h1>
+        <p class="subtitle">Please complete your identity verification</p>
+        
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+        
+        <form id="interactiveForm">
+            <div class="form-group">
+                <label for="name">Full Name *</label>
+                <input type="text" id="name" name="name" required placeholder="Enter your full name">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address *</label>
+                <input type="email" id="email" name="email" required placeholder="Enter your email address">
+            </div>
+            
+            <div class="form-group">
+                <label for="amount">Transfer Amount</label>
+                <div class="amount-display" id="amount">{{.Amount}}</div>
+            </div>
+            
+            <div class="button-group">
+                <button type="submit" class="btn-submit" id="submitBtn">Complete Transfer</button>
+                <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('interactiveForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const errorDiv = document.getElementById('errorMessage');
+            const successDiv = document.getElementById('successMessage');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Reset messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            // Validate fields
+            if (!name) {
+                errorDiv.textContent = 'Please enter your full name';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (!email) {
+                errorDiv.textContent = 'Please enter your email address';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Disable button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            
+            try {
+                // Get token from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+                
+                if (!token) {
+                    throw new Error('Missing token parameter');
+                }
+                
+                // Submit form data
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('email', email);
+                formData.append('token', token);
+                
+                const response = await fetch(window.location.pathname, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({ error: 'Server error' }));
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+                
+                // Success - show message and close window/redirect
+                successDiv.textContent = 'Transfer initiated successfully! This window will close in 2 seconds...';
+                successDiv.style.display = 'block';
+                
+                setTimeout(() => {
+                    if (window.opener) {
+                        window.close();
+                    } else {
+                        window.location.href = '/success';
+                    }
+                }, 2000);
+                
+            } catch (err) {
+                errorDiv.textContent = 'Error: ' + err.message;
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Complete Transfer';
+            }
+        });
+        
+        document.getElementById('cancelBtn').addEventListener('click', function() {
+            if (window.opener) {
+                window.close();
+            } else {
+                window.history.back();
+            }
+        });
+    </script>
+</body>
+</html>
