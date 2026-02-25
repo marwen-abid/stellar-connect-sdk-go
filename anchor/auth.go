@@ -90,12 +90,13 @@ func (a *AuthIssuer) CreateChallenge(ctx context.Context, account string) (strin
 
 	now := time.Now().UTC()
 	maxTime := now.Add(challengeTimeout)
+	serverAccount := a.signer.PublicKey()
 	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
-		SourceAccount:        &txnbuild.SimpleAccount{AccountID: account, Sequence: 0},
+		SourceAccount:        &txnbuild.SimpleAccount{AccountID: serverAccount, Sequence: 0},
 		IncrementSequenceNum: false,
 		Operations: []txnbuild.Operation{
-			&txnbuild.ManageData{Name: a.domain + " auth", Value: []byte(nonce)},
-			&txnbuild.ManageData{Name: "web_auth_domain", Value: []byte(a.domain)},
+			&txnbuild.ManageData{Name: a.domain + " auth", Value: []byte(nonce), SourceAccount: account},
+			&txnbuild.ManageData{Name: "web_auth_domain", Value: []byte(a.domain), SourceAccount: serverAccount},
 		},
 		BaseFee: challengeBaseFee,
 		Preconditions: txnbuild.Preconditions{
@@ -159,9 +160,16 @@ func (a *AuthIssuer) VerifyChallenge(ctx context.Context, challengeXDR string) (
 		return "", errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "nonce already used or expired", nil)
 	}
 
-	account := tx.SourceAccount().AccountID
+	// Verify transaction source account is the server
+	txSourceAccount := tx.SourceAccount().AccountID
+	if txSourceAccount != a.signer.PublicKey() {
+		return "", errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "challenge transaction source account must be the server signing key", nil)
+	}
+
+	// Extract client account from first operation's SourceAccount (per SEP-10)
+	account := firstOp.SourceAccount
 	if strings.TrimSpace(account) == "" {
-		return "", errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "challenge transaction missing source account", nil)
+		return "", errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "first operation missing source account (client account)", nil)
 	}
 	if err := verifyClientSignature(tx, a.networkPassphrase, account); err != nil {
 		return "", err
