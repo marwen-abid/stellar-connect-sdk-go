@@ -325,9 +325,11 @@ func (tm *TransferManager) updateAndTransition(ctx context.Context, transferID s
 	if err := tm.store.Update(ctx, transferID, update); err != nil {
 		return errors.NewAnchorError(errors.STORE_ERROR, "failed to update transfer", err)
 	}
-	updated, _ := tm.store.FindByID(ctx, transferID)
-	tm.hooks.Trigger(hook, updated)
-	tm.hooks.Trigger(HookTransferStatusChanged, updated)
+	updated, err := tm.store.FindByID(ctx, transferID)
+	if err == nil {
+		tm.hooks.Trigger(hook, updated)
+		tm.hooks.Trigger(HookTransferStatusChanged, updated)
+	}
 	return nil
 }
 
@@ -350,8 +352,10 @@ func (tm *TransferManager) transition(ctx context.Context, transferID string, ne
 	if err := tm.store.Update(ctx, transferID, update); err != nil {
 		return errors.NewAnchorError(errors.STORE_ERROR, "failed to update transfer", err)
 	}
-	updated, _ := tm.store.FindByID(ctx, transferID)
-	tm.hooks.Trigger(HookTransferStatusChanged, updated)
+	updated, err := tm.store.FindByID(ctx, transferID)
+	if err == nil {
+		tm.hooks.Trigger(HookTransferStatusChanged, updated)
+	}
 	return nil
 }
 
