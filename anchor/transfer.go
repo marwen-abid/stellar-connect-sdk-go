@@ -17,8 +17,10 @@ const (
 )
 
 type Config struct {
-	Domain             string
-	InteractiveBaseURL string
+	Domain              string
+	InteractiveBaseURL  string
+	DistributionAccount string
+	BaseURL             string
 }
 
 type TransferManager struct {
@@ -210,7 +212,7 @@ func (tm *TransferManager) InitiateWithdrawal(ctx context.Context, req Withdrawa
 	result := &WithdrawalResult{
 		ID:              transfer.ID,
 		InteractiveURL:  transfer.InteractiveURL,
-		StellarAccount:  tm.config.Domain,
+		StellarAccount:  tm.config.DistributionAccount,
 		StellarMemo:     transfer.ID,
 		StellarMemoType: "text",
 	}
@@ -290,7 +292,11 @@ func (tm *TransferManager) GetStatus(ctx context.Context, transferID string) (*T
 	if err != nil {
 		return nil, errors.NewAnchorError(errors.STORE_ERROR, "failed to load transfer", err)
 	}
-	moreInfo := fmt.Sprintf("http://localhost:8000/transaction/%s", transfer.ID)
+	baseURL := tm.config.BaseURL
+	if baseURL == "" {
+		baseURL = "http://localhost:8000"
+	}
+	moreInfo := fmt.Sprintf("%s/transaction/%s", strings.TrimRight(baseURL, "/"), transfer.ID)
 	resp := &TransferStatusResponse{
 		ID:           transfer.ID,
 		Kind:         string(transfer.Kind),
@@ -359,7 +365,11 @@ func (tm *TransferManager) generateInteractiveURL(transferID string) (string, st
 	tm.tokenMu.Unlock()
 	base := strings.TrimRight(tm.config.InteractiveBaseURL, "/")
 	if base == "" {
-		base = "http://localhost:8000/interactive"
+		baseURL := tm.config.BaseURL
+		if baseURL == "" {
+			baseURL = "http://localhost:8000"
+		}
+		base = strings.TrimRight(baseURL, "/") + "/interactive"
 	}
 	url := fmt.Sprintf("%s?token=%s", base, token)
 	return token, url, nil

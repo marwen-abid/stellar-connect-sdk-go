@@ -230,7 +230,7 @@ func handleSEP6Transaction(tm *anchor.TransferManager) http.HandlerFunc {
 
 // handleSEP6Transactions returns a list of transfers for the authenticated account.
 // Requires JWT authentication. Supports optional asset_code filter.
-func handleSEP6Transactions(store stellarconnect.TransferStore) http.HandlerFunc {
+func handleSEP6Transactions(store stellarconnect.TransferStore, baseURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := anchor.ClaimsFromContext(r.Context())
 		if !ok {
@@ -256,7 +256,7 @@ func handleSEP6Transactions(store stellarconnect.TransferStore) http.HandlerFunc
 		// Convert Transfer objects to TransferStatusResponse objects
 		responses := make([]*anchor.TransferStatusResponse, 0, len(transfers))
 		for _, transfer := range transfers {
-			moreInfo := "http://localhost:8000/transaction/" + transfer.ID
+			moreInfo := strings.TrimRight(baseURL, "/") + "/transaction/" + transfer.ID
 			resp := &anchor.TransferStatusResponse{
 				ID:           transfer.ID,
 				Kind:         string(transfer.Kind),

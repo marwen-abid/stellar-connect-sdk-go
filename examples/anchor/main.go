@@ -91,8 +91,10 @@ func main() {
 
 	transferStore := memory.NewTransferStore()
 	transferConfig := anchor.Config{
-		Domain:             testDomain,
-		InteractiveBaseURL: fmt.Sprintf("http://%s/interactive", testDomain),
+		Domain:              testDomain,
+		InteractiveBaseURL:  fmt.Sprintf("http://%s/interactive", testDomain),
+		DistributionAccount: signer.PublicKey(),
+		BaseURL:             fmt.Sprintf("http://%s", testDomain),
 	}
 	transferManager := anchor.NewTransferManager(transferStore, transferConfig, nil)
 
@@ -145,14 +147,14 @@ func main() {
 	mux.Handle("POST /sep24/transactions/deposit/interactive", authIssuer.RequireAuth(http.HandlerFunc(handleDepositInteractive(transferManager))))
 	mux.Handle("POST /sep24/transactions/withdraw/interactive", authIssuer.RequireAuth(http.HandlerFunc(handleWithdrawInteractive(transferManager))))
 	mux.Handle("GET /sep24/transaction", authIssuer.RequireAuth(http.HandlerFunc(handleGetTransaction(transferManager))))
-	mux.Handle("GET /sep24/transactions", authIssuer.RequireAuth(http.HandlerFunc(handleGetTransactions(transferStore))))
+	mux.Handle("GET /sep24/transactions", authIssuer.RequireAuth(http.HandlerFunc(handleGetTransactions(transferStore, transferConfig.BaseURL))))
 	mux.HandleFunc("GET /interactive", handleGetInteractive(transferManager))
 	mux.HandleFunc("POST /interactive", handlePostInteractive(transferManager))
 	mux.HandleFunc("GET /sep6/info", handleSEP6Info())
 	mux.Handle("GET /sep6/deposit", authIssuer.RequireAuth(http.HandlerFunc(handleSEP6Deposit(transferManager))))
 	mux.Handle("GET /sep6/withdraw", authIssuer.RequireAuth(http.HandlerFunc(handleSEP6Withdraw(transferManager))))
 	mux.Handle("GET /sep6/transaction", authIssuer.RequireAuth(http.HandlerFunc(handleSEP6Transaction(transferManager))))
-	mux.Handle("GET /sep6/transactions", authIssuer.RequireAuth(http.HandlerFunc(handleSEP6Transactions(transferStore))))
+	mux.Handle("GET /sep6/transactions", authIssuer.RequireAuth(http.HandlerFunc(handleSEP6Transactions(transferStore, transferConfig.BaseURL))))
 
 	handler := corsMiddleware(mux)
 
