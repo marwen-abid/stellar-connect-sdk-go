@@ -9,14 +9,15 @@ import (
 // callbackSigner wraps a custom signing function for external signing services.
 type callbackSigner struct {
 	publicKey string
-	signFunc  func(context.Context, string) (string, error)
+	signFunc  func(context.Context, string, string) (string, error)
 }
 
 // FromCallback creates a Signer from a public key and an arbitrary signing function.
+// The signFunc receives (ctx, xdr, networkPassphrase) and returns (signedXDR, error).
 // Intended for wrapping HSMs, custodial APIs, or any external signing service.
 func FromCallback(
 	publicKey string,
-	signFunc func(context.Context, string) (string, error),
+	signFunc func(context.Context, string, string) (string, error),
 ) stellarconnect.Signer {
 	return &callbackSigner{
 		publicKey: publicKey,
@@ -31,6 +32,6 @@ func (s *callbackSigner) PublicKey() string {
 
 // SignTransaction signs a Stellar transaction envelope (base64 XDR) by delegating to the callback function.
 // Returns the signed envelope as base64 XDR.
-func (s *callbackSigner) SignTransaction(ctx context.Context, xdr string) (string, error) {
-	return s.signFunc(ctx, xdr)
+func (s *callbackSigner) SignTransaction(ctx context.Context, xdr string, networkPassphrase string) (string, error) {
+	return s.signFunc(ctx, xdr, networkPassphrase)
 }

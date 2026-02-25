@@ -6,6 +6,7 @@ import (
 
 	"github.com/stellar-connect/sdk-go"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/txnbuild"
 )
 
 // keypairSigner wraps a stellar/go keypair for signing transactions.
@@ -30,11 +31,23 @@ func (s *keypairSigner) PublicKey() string {
 }
 
 // SignTransaction signs a Stellar transaction envelope (base64 XDR).
-// Returns the signed envelope as base64 XDR.
-func (s *keypairSigner) SignTransaction(ctx context.Context, xdr string) (string, error) {
-	signed, err := s.kp.SignBase64([]byte(xdr))
+// It parses the XDR, signs the transaction hash with the keypair, and returns
+// the signed envelope as base64 XDR.
+func (s *keypairSigner) SignTransaction(ctx context.Context, xdr string, networkPassphrase string) (string, error) {
+	parsed, err := txnbuild.TransactionFromXDR(xdr)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse transaction XDR: %w", err)
 	}
-	return signed, nil
+
+	tx, ok := parsed.Transaction()
+	if !ok {
+		return "", fmt.Errorf("expected a Transaction, got a FeeBumpTransaction")
+	}
+
+	signedTx, err := tx.Sign(networkPassphrase, s.kp)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
+	return signedTx.Base64()
 }

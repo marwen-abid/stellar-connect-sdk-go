@@ -111,7 +111,7 @@ func (a *AuthIssuer) CreateChallenge(ctx context.Context, account string) (strin
 		return "", errors.NewAnchorError(errors.CHALLENGE_BUILD_FAILED, "failed to encode challenge transaction", err)
 	}
 
-	signedXDR, err := a.signer.SignTransaction(ctx, xdr)
+	signedXDR, err := a.signer.SignTransaction(ctx, xdr, a.networkPassphrase)
 	if err != nil {
 		return "", errors.NewAnchorError(errors.CHALLENGE_BUILD_FAILED, "failed to sign challenge transaction", err)
 	}

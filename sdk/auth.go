@@ -112,7 +112,7 @@ func (c *Client) Login(ctx context.Context, account, homeDomain string, signer s
 	}
 
 	// Step 3: Sign the challenge transaction using the provided signer
-	signedXDR, err := signer.SignTransaction(ctx, challengeResp.Transaction)
+	signedXDR, err := signer.SignTransaction(ctx, challengeResp.Transaction, c.networkPassphrase)
 	if err != nil {
 		return nil, errors.NewClientError(
 			errors.SIGNER_ERROR,

@@ -17,8 +17,9 @@ type Signer interface {
 	PublicKey() string
 
 	// SignTransaction signs a Stellar transaction envelope (base64 XDR).
+	// The networkPassphrase is required for computing the correct transaction hash.
 	// Returns the signed envelope as base64 XDR.
-	SignTransaction(ctx context.Context, xdr string) (string, error)
+	SignTransaction(ctx context.Context, xdr string, networkPassphrase string) (string, error)
 }
 
 // MessageSigner is an optional extension for SEP-45 smart contract wallet auth.
