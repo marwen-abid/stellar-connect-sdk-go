@@ -250,7 +250,25 @@ func (tm *TransferManager) CompleteInteractive(ctx context.Context, transferID s
 	return tm.transition(ctx, transferID, next, "")
 }
 
-func (tm *TransferManager) VerifyInteractiveToken(ctx context.Context, token string) (*stellarconnect.Transfer, error) {
+// PeekInteractiveToken validates the token without consuming it.
+// Use this for GET requests that display the interactive form.
+func (tm *TransferManager) PeekInteractiveToken(ctx context.Context, token string) (*stellarconnect.Transfer, error) {
+	tm.tokenMu.Lock()
+	transferID, ok := tm.tokenToID[token]
+	tm.tokenMu.Unlock()
+	if !ok {
+		return nil, errors.NewAnchorError(errors.INTERACTIVE_TOKEN_INVALID, "interactive token invalid", nil)
+	}
+	transfer, err := tm.store.FindByID(ctx, transferID)
+	if err != nil {
+		return nil, errors.NewAnchorError(errors.STORE_ERROR, "failed to load transfer", err)
+	}
+	return transfer, nil
+}
+
+// ConsumeInteractiveToken validates and deletes the token.
+// Use this for POST requests that finalize the interactive flow.
+func (tm *TransferManager) ConsumeInteractiveToken(ctx context.Context, token string) (*stellarconnect.Transfer, error) {
 	tm.tokenMu.Lock()
 	transferID, ok := tm.tokenToID[token]
 	if ok {
@@ -265,6 +283,11 @@ func (tm *TransferManager) VerifyInteractiveToken(ctx context.Context, token str
 		return nil, errors.NewAnchorError(errors.STORE_ERROR, "failed to load transfer", err)
 	}
 	return transfer, nil
+}
+
+// VerifyInteractiveToken validates and deletes the token (alias for ConsumeInteractiveToken).
+func (tm *TransferManager) VerifyInteractiveToken(ctx context.Context, token string) (*stellarconnect.Transfer, error) {
+	return tm.ConsumeInteractiveToken(ctx, token)
 }
 
 func (tm *TransferManager) NotifyFundsReceived(ctx context.Context, transferID string, details FundsReceivedDetails) error {

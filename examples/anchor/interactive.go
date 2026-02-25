@@ -42,8 +42,8 @@ func handleGetInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 			return
 		}
 
-		// Verify token and get transfer
-		transfer, err := tm.VerifyInteractiveToken(context.Background(), token)
+		// Peek token without consuming it (GET displays form, POST consumes)
+		transfer, err := tm.PeekInteractiveToken(context.Background(), token)
 		if err != nil {
 			log.Printf("Invalid token: %v", err)
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
@@ -88,8 +88,8 @@ func handlePostInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 			return
 		}
 
-		// Verify token to get transfer ID
-		transfer, err := tm.VerifyInteractiveToken(context.Background(), token)
+		// Consume token to get transfer ID (one-time use on POST)
+		transfer, err := tm.ConsumeInteractiveToken(context.Background(), token)
 		if err != nil {
 			log.Printf("Invalid token on POST: %v", err)
 			w.Header().Set("Content-Type", "application/json")
