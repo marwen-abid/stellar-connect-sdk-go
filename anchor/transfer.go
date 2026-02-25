@@ -24,11 +24,13 @@ type Config struct {
 }
 
 type TransferManager struct {
-	store     stellarconnect.TransferStore
-	config    Config
-	hooks     *HookRegistry
-	tokenMu   sync.Mutex
-	tokenToID map[string]string
+	store         stellarconnect.TransferStore
+	config        Config
+	hooks         *HookRegistry
+	tokenMu       sync.Mutex
+	tokenToID     map[string]string
+	transferMu    sync.Mutex
+	transferLocks map[string]*sync.Mutex
 }
 
 func NewTransferManager(store stellarconnect.TransferStore, config Config, hooks *HookRegistry) *TransferManager {
@@ -36,11 +38,24 @@ func NewTransferManager(store stellarconnect.TransferStore, config Config, hooks
 		hooks = NewHookRegistry()
 	}
 	return &TransferManager{
-		store:     store,
-		config:    config,
-		hooks:     hooks,
-		tokenToID: make(map[string]string),
+		store:         store,
+		config:        config,
+		hooks:         hooks,
+		tokenToID:     make(map[string]string),
+		transferLocks: make(map[string]*sync.Mutex),
 	}
+}
+
+// lockForTransfer returns a per-transfer mutex, creating one if needed.
+func (tm *TransferManager) lockForTransfer(id string) *sync.Mutex {
+	tm.transferMu.Lock()
+	defer tm.transferMu.Unlock()
+	mu, ok := tm.transferLocks[id]
+	if !ok {
+		mu = &sync.Mutex{}
+		tm.transferLocks[id] = mu
+	}
+	return mu
 }
 
 type DepositRequest struct {
@@ -314,6 +329,10 @@ func (tm *TransferManager) GetStatus(ctx context.Context, transferID string) (*T
 }
 
 func (tm *TransferManager) updateAndTransition(ctx context.Context, transferID string, update *stellarconnect.TransferUpdate, next stellarconnect.TransferStatus, hook HookEvent) error {
+	mu := tm.lockForTransfer(transferID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	transfer, err := tm.store.FindByID(ctx, transferID)
 	if err != nil {
 		return errors.NewAnchorError(errors.STORE_ERROR, "failed to load transfer", err)
@@ -334,6 +353,10 @@ func (tm *TransferManager) updateAndTransition(ctx context.Context, transferID s
 }
 
 func (tm *TransferManager) transition(ctx context.Context, transferID string, next stellarconnect.TransferStatus, message string) error {
+	mu := tm.lockForTransfer(transferID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	transfer, err := tm.store.FindByID(ctx, transferID)
 	if err != nil {
 		return errors.NewAnchorError(errors.STORE_ERROR, "failed to load transfer", err)
