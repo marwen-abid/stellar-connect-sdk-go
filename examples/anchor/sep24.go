@@ -107,7 +107,7 @@ func handleDepositInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 		}
 
 		response := sep24InteractiveResponse{
-			Type: "interactive",
+			Type: "interactive_customer_info_needed",
 			URL:  result.InteractiveURL,
 			ID:   result.ID,
 		}
@@ -159,7 +159,7 @@ func handleWithdrawInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 		}
 
 		response := sep24InteractiveResponse{
-			Type: "interactive",
+			Type: "interactive_customer_info_needed",
 			URL:  result.InteractiveURL,
 			ID:   result.ID,
 		}
