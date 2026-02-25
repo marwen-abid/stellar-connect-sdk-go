@@ -197,45 +197,34 @@ type JWTClaims struct {
 // PaymentEvent represents an incoming or outgoing Stellar payment
 // detected by the Observer.
 type PaymentEvent struct {
-	TxHash      string
-	From        string
-	To          string
-	AssetCode   string
-	AssetIssuer string
-	Amount      string
-	Memo        string
-	MemoType    string
-	LedgerSeq   uint32
-	Timestamp   time.Time
+	ID              string
+	From            string
+	To              string
+	Asset           string
+	Amount          string
+	Memo            string
+	Cursor          string
+	TransactionHash string
 }
 
 // PaymentHandler is a callback invoked when the Observer detects
 // a payment matching the registered filters.
-type PaymentHandler func(ctx context.Context, event PaymentEvent) error
+type PaymentHandler func(event PaymentEvent) error
 
 // Observer watches the Stellar network for events relevant to anchor operations.
 // It wraps Horizon streaming or Soroban RPC and emits typed events through
 // registered handlers.
 type Observer interface {
-	// OnPayment registers a handler for incoming payments to the given account.
-	// The handler is called for every payment matching the filters.
+	// OnPayment registers a handler for payment events with optional filters.
 	// Multiple handlers can be registered; they execute sequentially.
-	OnPayment(account string, handler PaymentHandler, opts ...PaymentFilter) error
+	OnPayment(handler PaymentHandler, filters ...PaymentFilter)
 
 	// Start begins watching the network. Blocks until ctx is cancelled.
 	Start(ctx context.Context) error
 
 	// Stop gracefully shuts down the observer.
-	Stop(ctx context.Context) error
+	Stop() error
 }
 
 // PaymentFilter narrows which payments trigger a handler.
-type PaymentFilter func(*PaymentFilterConfig)
-
-// PaymentFilterConfig contains criteria for filtering payment events.
-type PaymentFilterConfig struct {
-	AssetCode   string
-	AssetIssuer string
-	MinAmount   string
-	MemoPrefix  string
-}
+type PaymentFilter func(PaymentEvent) bool
