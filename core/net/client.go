@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -114,12 +115,11 @@ func (c *Client) Post(ctx context.Context, url string, body io.Reader) (*Respons
 
 // PostForm performs an HTTP POST request with form data.
 func (c *Client) PostForm(ctx context.Context, urlStr string, data url.Values) (*Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, errors.NewCoreError(errors.NETWORK_ERROR, "failed to create POST form request", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.PostForm = data
 	return c.do(req)
 }
 
