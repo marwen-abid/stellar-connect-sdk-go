@@ -15,6 +15,7 @@
 package net
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -134,6 +135,17 @@ func (c *Client) do(req *http.Request) (*Response, error) {
 		)
 	}
 
+	// Buffer the request body so it can be replayed on retries
+	var bodyBytes []byte
+	if req.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(req.Body)
+		if err != nil {
+			return nil, errors.NewCoreError(errors.NETWORK_ERROR, "failed to read request body", err)
+		}
+		req.Body.Close()
+	}
+
 	var lastErr error
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		// Check context cancellation
@@ -145,6 +157,12 @@ func (c *Client) do(req *http.Request) (*Response, error) {
 				req.Context().Err(),
 			)
 		default:
+		}
+
+		// Reset body for each attempt
+		if bodyBytes != nil {
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			req.ContentLength = int64(len(bodyBytes))
 		}
 
 		resp, err := c.httpClient.Do(req)
