@@ -535,7 +535,7 @@ Any state can transition to: failed, denied, cancelled, expired
 
 ## Complete Example
 
-See [`examples/anchor/main.go`](./examples/anchor/main.go) for a full working anchor server.
+See [`examples/anchor/main.go`](examples/basic-anchor/main.go) for a full working anchor server.
 
 ```go
 package main

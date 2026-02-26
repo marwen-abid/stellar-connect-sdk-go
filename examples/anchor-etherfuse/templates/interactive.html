@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Etherfuse Anchor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 24px 16px;
+            background: #f5f5f5;
+            color: #1a1a1a;
+        }
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 32px 28px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        h1 { font-size: 22px; margin-bottom: 8px; }
+        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 6px; }
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+        }
+        .btn {
+            display: inline-block;
+            width: 100%;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .btn-primary { background: #4f46e5; color: #fff; }
+        .btn-primary:hover { background: #4338ca; }
+        .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+        .btn-secondary { background: #f3f4f6; color: #374151; }
+        .btn-secondary:hover { background: #e5e7eb; }
+        .btn-group { display: flex; gap: 12px; margin-top: 24px; }
+        .btn-group .btn { flex: 1; }
+        .alert { padding: 14px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; }
+        .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+        .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: #6b7280; }
+        .detail-value { font-weight: 600; color: #1f2937; }
+        .detail-value.highlight { color: #4f46e5; font-size: 16px; }
+        .clabe-box {
+            background: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            margin: 16px 0;
+        }
+        .clabe-box code {
+            display: block;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: #1e293b;
+            margin-top: 4px;
+            user-select: all;
+        }
+        .clabe-box small { color: #64748b; font-size: 12px; }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status-text { display: inline-block; vertical-align: middle; }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-deposit { background: #dbeafe; color: #1e40af; }
+        .badge-withdrawal { background: #fef3c7; color: #92400e; }
+        .countdown { font-weight: 700; color: #dc2626; font-size: 13px; }
+        #errorMessage { display: none; }
+    </style>
+</head>
+<body>
+<div class="card">
+
+{{if eq .Step "onboard"}}
+    <h1>Identity Verification</h1>
+    <p class="subtitle">To proceed with your <span class="badge {{if eq .Kind "deposit"}}badge-deposit{{else}}badge-withdrawal{{end}}">{{.Kind}}</span>, you need to verify your identity.</p>
+    <div class="alert alert-info">
+        You will be redirected to our verification partner Etherfuse to complete identity verification. This includes providing your name, ID, and address.
+    </div>
+    <div id="errorMessage" class="alert alert-error"></div>
+    <button class="btn btn-primary" id="startOnboard" type="button">Start Verification</button>
+    <script>
+        document.getElementById('startOnboard').addEventListener('click', async function() {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Preparing...';
+            const errDiv = document.getElementById('errorMessage');
+            errDiv.style.display = 'none';
+            try {
+                const resp = await fetch('/interactive/onboard?token={{.Token}}', {method:'POST'});
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({error:'Server error'}));
+                    throw new Error(data.error || 'HTTP ' + resp.status);
+                }
+                const data = await resp.json();
+                if (data.onboarding_url) {
+                    window.open(data.onboarding_url, '_blank');
+                    // Redirect to KYC pending page
+                    window.location.href = '/interactive?token={{.Token}}';
+                }
+            } catch(e) {
+                errDiv.textContent = e.message;
+                errDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Start Verification';
+            }
+        });
+    </script>
+
+{{else if eq .Step "kyc-pending"}}
+    <h1>Verification In Progress</h1>
+    <p class="subtitle">Your identity verification is being reviewed.</p>
+    <div style="text-align:center; padding: 32px 0;">
+        <div class="spinner"></div>
+        <span class="status-text" id="statusText">Checking verification status...</span>
+    </div>
+    <div class="alert alert-info">
+        If you haven't completed verification yet, please check the verification window. Once approved, this page will automatically continue.
+    </div>
+    <script>
+        let pollCount = 0;
+        const maxPolls = 200; // ~10 minutes at 3s intervals
+        async function pollKYC() {
+            if (pollCount++ > maxPolls) {
+                document.getElementById('statusText').textContent = 'Verification timed out. Please refresh.';
+                return;
+            }
+            try {
+                const resp = await fetch('/interactive/kyc-poll?token={{.Token}}');
+                const data = await resp.json();
+                if (data.status === 'approved') {
+                    window.location.href = '/interactive?token={{.Token}}';
+                    return;
+                } else if (data.status === 'rejected') {
+                    window.location.href = '/interactive?token={{.Token}}';
+                    return;
+                }
+            } catch(e) { /* ignore poll errors */ }
+            setTimeout(pollKYC, 3000);
+        }
+        pollKYC();
+    </script>
+
+{{else if eq .Step "amount"}}
+    <h1>{{if eq .Kind "deposit"}}Deposit Details{{else}}Withdrawal Details{{end}}</h1>
+    <p class="subtitle">
+        {{if eq .Kind "deposit"}}Enter the amount of MXN you want to deposit.
+        {{else}}Enter the amount of crypto you want to withdraw.{{end}}
+    </p>
+    <div id="errorMessage" class="alert alert-error"></div>
+    <form id="quoteForm" method="POST" action="/interactive/quote?token={{.Token}}">
+        <div class="form-group">
+            <label for="asset_code">Asset</label>
+            <select name="asset_code" id="asset_code">
+                {{range .AvailableAssets}}
+                <option value="{{.}}" {{if eq $.AssetCode .}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="amount">
+                {{if eq .Kind "deposit"}}Amount (MXN){{else}}Amount (crypto){{end}}
+            </label>
+            <input type="number" name="amount" id="amount" step="0.01" min="0.01"
+                   value="{{if and .Amount (ne .Amount "0")}}{{.Amount}}{{end}}"
+                   placeholder="{{if eq .Kind "deposit"}}e.g. 1000.00{{else}}e.g. 50.00{{end}}" required>
+        </div>
+        <button type="submit" class="btn btn-primary" id="quoteBtn">Get Exchange Rate</button>
+    </form>
+    <script>
+        document.getElementById('quoteForm').addEventListener('submit', function() {
+            document.getElementById('quoteBtn').disabled = true;
+            document.getElementById('quoteBtn').textContent = 'Getting rate...';
+        });
+    </script>
+
+{{else if eq .Step "quote-confirm"}}
+    <h1>Confirm {{if eq .Kind "deposit"}}Deposit{{else}}Withdrawal{{end}}</h1>
+    <p class="subtitle">Review the exchange details below.</p>
+    <div class="detail-row">
+        <span class="detail-label">{{if eq .Kind "deposit"}}You pay{{else}}You send{{end}}</span>
+        <span class="detail-value">{{.SourceAmount}} {{if eq .Kind "deposit"}}MXN{{else}}{{.AssetCode}}{{end}}</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Exchange Rate</span>
+        <span class="detail-value">{{.ExchangeRate}}</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Fee</span>
+        <span class="detail-value">{{.FeeAmount}} {{if eq .Kind "deposit"}}{{.AssetCode}}{{else}}MXN{{end}}</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">{{if eq .Kind "deposit"}}You receive{{else}}You get{{end}}</span>
+        <span class="detail-value highlight">{{.DestAmountFee}} {{if eq .Kind "deposit"}}{{.AssetCode}}{{else}}MXN{{end}}</span>
+    </div>
+    <div style="text-align:center; margin-top:8px;">
+        <span class="countdown" id="countdown">Quote expires in 120s</span>
+    </div>
+    <form id="orderForm" method="POST" action="/interactive/order?token={{.Token}}">
+        <input type="hidden" name="quote_id" value="{{.QuoteID}}">
+        <div class="btn-group">
+            <button type="submit" class="btn btn-primary" id="confirmBtn">Confirm</button>
+            <button type="button" class="btn btn-secondary" onclick="history.back()">Change Amount</button>
+        </div>
+    </form>
+    <script>
+        let seconds = 120;
+        const countdownEl = document.getElementById('countdown');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const timer = setInterval(function() {
+            seconds--;
+            countdownEl.textContent = 'Quote expires in ' + seconds + 's';
+            if (seconds <= 0) {
+                clearInterval(timer);
+                countdownEl.textContent = 'Quote expired';
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Quote Expired';
+            }
+        }, 1000);
+        document.getElementById('orderForm').addEventListener('submit', function() {
+            if (seconds <= 0) {
+                event.preventDefault();
+                alert('Quote has expired. Please go back and request a new quote.');
+                return;
+            }
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Processing...';
+            clearInterval(timer);
+        });
+    </script>
+
+{{else if eq .Step "deposit-instructions"}}
+    <h1>Deposit Instructions</h1>
+    <p class="subtitle">Send the exact amount below via SPEI to complete your deposit.</p>
+    <div class="alert alert-success">Order created successfully!</div>
+    <div class="clabe-box">
+        <small>CLABE Number (SPEI)</small>
+        <code id="clabeNumber">{{.DepositClabe}}</code>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Amount to send</span>
+        <span class="detail-value highlight">{{.DepositAmount}} MXN</span>
+    </div>
+    <div class="detail-row">
+        <span class="detail-label">Order ID</span>
+        <span class="detail-value" style="font-size:12px; word-break:break-all;">{{.OrderID}}</span>
+    </div>
+    <div class="alert alert-info" style="margin-top:16px;">
+        Once we receive your SPEI transfer, your {{.AssetCode}} will be sent to your Stellar account automatically.
+    </div>
+    <div class="btn-group" style="margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('{{.DepositClabe}}').then(()=>this.textContent='Copied!')">Copy CLABE</button>
+        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('{{.OrderID}}').then(()=>this.textContent='Copied!')">Copy Order ID</button>
+        <button class="btn btn-primary" onclick="if(window.opener){window.close()}else{window.location.href='/'}">Done</button>
+    </div>
+
+{{else if eq .Step "withdrawal-pending"}}
+    <h1>Withdrawal Initiated</h1>
+    <p class="subtitle">Your withdrawal order has been created.</p>
+    <div class="alert alert-success">
+        Your withdrawal order is being processed. Your wallet will prompt you to send a Stellar payment to complete the process.
+    </div>
+    <div class="alert alert-info" style="margin-top:12px;">
+        Once the Stellar payment is confirmed, the MXN will be sent to your registered bank account via SPEI.
+    </div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="if(window.opener){window.close()}else{window.location.href='/'}">Done</button>
+
+{{else if eq .Step "kyc-rejected"}}
+    <h1>Verification Failed</h1>
+    <p class="subtitle">Your identity verification was not approved.</p>
+    <div class="alert alert-error">
+        {{if .ErrorMessage}}{{.ErrorMessage}}{{else}}Your identity verification was rejected. Please contact support for assistance.{{end}}
+    </div>
+    <button class="btn btn-secondary" onclick="if(window.opener){window.close()}else{window.history.back()}">Close</button>
+
+{{else if eq .Step "error"}}
+    <h1>Something Went Wrong</h1>
+    <div class="alert alert-error">{{.ErrorMessage}}</div>
+    <div class="btn-group">
+        <button class="btn btn-primary" onclick="window.location.href='/interactive?token={{.Token}}'">Try Again</button>
+        <button class="btn btn-secondary" onclick="if(window.opener){window.close()}else{window.history.back()}">Close</button>
+    </div>
+
+{{end}}
+
+</div>
+</body>
+</html>
