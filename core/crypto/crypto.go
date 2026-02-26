@@ -23,7 +23,7 @@ func GenerateNonce(length int) (string, error) {
 		return "", fmt.Errorf("failed to generate random nonce: %w", err)
 	}
 
-	encodedNonce := base64.StdEncoding.EncodeToString(nonce)
+	encodedNonce := base64.RawURLEncoding.EncodeToString(nonce)
 	return encodedNonce, nil
 }
 

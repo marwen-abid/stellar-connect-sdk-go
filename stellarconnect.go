@@ -194,6 +194,29 @@ type JWTClaims struct {
 	Memo       string // Optional memo from auth challenge
 }
 
+// AccountSigner represents a signer registered on a Stellar account.
+type AccountSigner struct {
+	Key    string // Public key (G...)
+	Weight int32  // Signing weight
+}
+
+// AccountThresholds represents the threshold levels for a Stellar account.
+type AccountThresholds struct {
+	Low    byte
+	Medium byte
+	High   byte
+}
+
+// AccountFetcher retrieves account signer information from the Stellar network.
+// Implementations may use Horizon, Soroban RPC, or any other data source.
+// The SDK uses this during SEP-10 challenge verification to validate
+// that signatures meet the account's medium threshold.
+type AccountFetcher interface {
+	// FetchSigners returns the signers and thresholds for a Stellar account.
+	// Returns an error if the account cannot be found or the lookup fails.
+	FetchSigners(ctx context.Context, accountID string) ([]AccountSigner, AccountThresholds, error)
+}
+
 // PaymentEvent represents an incoming or outgoing Stellar payment
 // detected by the Observer.
 type PaymentEvent struct {

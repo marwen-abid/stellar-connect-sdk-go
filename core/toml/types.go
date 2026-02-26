@@ -45,6 +45,12 @@ type CurrencyInfo struct {
 	// AnchorAssetType indicates the asset type (e.g., "crypto", "fiat") (optional).
 	AnchorAssetType string
 
+	// IsAssetAnchored indicates whether the asset is anchored to a real-world asset (required by anchor-tests).
+	IsAssetAnchored bool
+
+	// Desc is a short description of the asset (required by anchor-tests).
+	Desc string
+
 	// Description provides a human-readable description of the asset (optional).
 	Description string
 }

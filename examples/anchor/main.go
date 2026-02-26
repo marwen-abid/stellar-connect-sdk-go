@@ -17,9 +17,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/stellar-connect/sdk-go/anchor"
+	"github.com/stellar-connect/sdk-go/core/account"
 	"github.com/stellar-connect/sdk-go/core/toml"
 	"github.com/stellar-connect/sdk-go/observer"
 	"github.com/stellar-connect/sdk-go/signers"
@@ -77,6 +79,8 @@ func main() {
 		jwtExpiry,
 	)
 
+	accountFetcher := account.NewHorizonAccountFetcher(horizonURL)
+
 	authIssuer, err := anchor.NewAuthIssuer(anchor.AuthConfig{
 		Domain:            testDomain,
 		NetworkPassphrase: testNetworkPassphrase,
@@ -84,6 +88,7 @@ func main() {
 		NonceStore:        nonceStore,
 		JWTIssuer:         jwtIssuer,
 		JWTVerifier:       jwtVerifier,
+		AccountFetcher:    accountFetcher,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create auth issuer: %v", err)
@@ -125,6 +130,8 @@ func main() {
 				Status:          "test",
 				DisplayDecimals: 2,
 				AnchorAssetType: "fiat",
+				IsAssetAnchored: true,
+				Desc:            "Test USDC token for development",
 				Description:     "Test USDC token for development",
 			},
 		},
@@ -148,6 +155,7 @@ func main() {
 	mux.Handle("POST /sep24/transactions/withdraw/interactive", authIssuer.RequireAuth(http.HandlerFunc(handleWithdrawInteractive(transferManager))))
 	mux.Handle("GET /sep24/transaction", authIssuer.RequireAuth(http.HandlerFunc(handleGetTransaction(transferManager))))
 	mux.Handle("GET /sep24/transactions", authIssuer.RequireAuth(http.HandlerFunc(handleGetTransactions(transferStore, transferConfig.BaseURL))))
+	mux.HandleFunc("GET /transaction/{id}", handleMoreInfo(transferManager))
 	mux.HandleFunc("GET /interactive", handleGetInteractive(transferManager))
 	mux.HandleFunc("POST /interactive", handlePostInteractive(transferManager))
 	mux.HandleFunc("GET /sep6/info", handleSEP6Info())
@@ -184,12 +192,19 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// writeJSONError writes a JSON error response with the given status code and message.
+func writeJSONError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
 // handleGetChallenge returns a SEP-10 challenge transaction for the given account.
 func handleGetChallenge(authIssuer *anchor.AuthIssuer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		account := r.URL.Query().Get("account")
 		if account == "" {
-			http.Error(w, `{"error":"missing account parameter"}`, http.StatusBadRequest)
+			writeJSONError(w, "missing account parameter", http.StatusBadRequest)
 			return
 		}
 
@@ -197,7 +212,7 @@ func handleGetChallenge(authIssuer *anchor.AuthIssuer) http.HandlerFunc {
 		challengeXDR, err := authIssuer.CreateChallenge(ctx, account)
 		if err != nil {
 			log.Printf("Failed to create challenge: %v", err)
-			http.Error(w, `{"error":"failed to create challenge"}`, http.StatusInternalServerError)
+			writeJSONError(w, "failed to create challenge", http.StatusBadRequest)
 			return
 		}
 
@@ -215,29 +230,41 @@ func handleGetChallenge(authIssuer *anchor.AuthIssuer) http.HandlerFunc {
 // handlePostChallenge verifies a signed SEP-10 challenge and returns a JWT token.
 func handlePostChallenge(authIssuer *anchor.AuthIssuer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, `{"error":"failed to read request body"}`, http.StatusBadRequest)
-			return
-		}
-		defer r.Body.Close()
+		var transaction string
 
-		var req authRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
-			return
+		contentType := r.Header.Get("Content-Type")
+		if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+			if err := r.ParseForm(); err != nil {
+				writeJSONError(w, "failed to parse form data", http.StatusBadRequest)
+				return
+			}
+			transaction = r.FormValue("transaction")
+		} else {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				writeJSONError(w, "failed to read request body", http.StatusBadRequest)
+				return
+			}
+			defer r.Body.Close()
+
+			var req authRequest
+			if err := json.Unmarshal(body, &req); err != nil {
+				writeJSONError(w, "invalid JSON", http.StatusBadRequest)
+				return
+			}
+			transaction = req.Transaction
 		}
 
-		if req.Transaction == "" {
-			http.Error(w, `{"error":"missing transaction"}`, http.StatusBadRequest)
+		if transaction == "" {
+			writeJSONError(w, "missing transaction", http.StatusBadRequest)
 			return
 		}
 
 		ctx := context.Background()
-		token, err := authIssuer.VerifyChallenge(ctx, req.Transaction)
+		token, err := authIssuer.VerifyChallenge(ctx, transaction)
 		if err != nil {
 			log.Printf("Failed to verify challenge: %v", err)
-			http.Error(w, `{"error":"challenge verification failed"}`, http.StatusUnauthorized)
+			writeJSONError(w, "challenge verification failed", http.StatusBadRequest)
 			return
 		}
 

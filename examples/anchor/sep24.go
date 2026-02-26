@@ -3,17 +3,30 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	stellarconnect "github.com/stellar-connect/sdk-go"
 	"github.com/stellar-connect/sdk-go/anchor"
+	"github.com/stellar/go/keypair"
 )
+
+// supportedAssets is the set of asset codes supported by this example anchor.
+var supportedAssets = map[string]bool{"USDC": true}
 
 // SEP-24 Info response structure
 type sep24InfoResponse struct {
 	Deposit  map[string]assetInfo `json:"deposit"`
 	Withdraw map[string]assetInfo `json:"withdraw"`
+	Fee      feeInfo              `json:"fee"`
+}
+
+type feeInfo struct {
+	Enabled bool `json:"enabled"`
 }
 
 type assetInfo struct {
@@ -31,9 +44,26 @@ type sep24InteractiveResponse struct {
 	ID   string `json:"id"`
 }
 
+// SEP-24 single transaction response wrapper (per SEP-24 spec)
+type sep24TransactionResponse struct {
+	Transaction *anchor.TransferStatusResponse `json:"transaction"`
+}
+
 // SEP-24 Transactions list response
 type sep24TransactionsResponse struct {
 	Transactions []*anchor.TransferStatusResponse `json:"transactions"`
+}
+
+// mapStatusToSEP24 maps internal SDK statuses to SEP-24 spec statuses.
+func mapStatusToSEP24(status string) string {
+	switch status {
+	case "interactive", "initiating":
+		return "incomplete"
+	case "failed", "denied", "cancelled":
+		return "error"
+	default:
+		return status
+	}
 }
 
 // handleSEP24Info returns asset information for SEP-24 deposits and withdrawals.
@@ -59,6 +89,7 @@ func handleSEP24Info() http.HandlerFunc {
 					MaxAmount:  10000,
 				},
 			},
+			Fee: feeInfo{Enabled: false},
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -73,13 +104,23 @@ func handleDepositInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := anchor.ClaimsFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+			writeJSONError(w, "authentication required", http.StatusForbidden)
 			return
 		}
 
 		assetCode, account, amount, err := parseDepositRequest(r)
 		if err != nil {
-			http.Error(w, `{"error":"invalid request format"}`, http.StatusBadRequest)
+			writeJSONError(w, "invalid request format", http.StatusBadRequest)
+			return
+		}
+
+		if strings.TrimSpace(assetCode) == "" {
+			writeJSONError(w, "asset_code is required", http.StatusBadRequest)
+			return
+		}
+
+		if !supportedAssets[assetCode] {
+			writeJSONError(w, "unsupported asset_code", http.StatusBadRequest)
 			return
 		}
 
@@ -88,9 +129,15 @@ func handleDepositInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 			account = claims.Subject
 		}
 
-		if strings.TrimSpace(assetCode) == "" {
-			http.Error(w, `{"error":"asset_code is required"}`, http.StatusBadRequest)
+		// Validate account format
+		if _, err := keypair.ParseAddress(account); err != nil {
+			writeJSONError(w, "invalid account", http.StatusBadRequest)
 			return
+		}
+
+		// Amount is optional for interactive deposits
+		if strings.TrimSpace(amount) == "" {
+			amount = "0"
 		}
 
 		req := anchor.DepositRequest{
@@ -102,7 +149,7 @@ func handleDepositInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 
 		result, err := tm.InitiateDeposit(context.Background(), req)
 		if err != nil {
-			http.Error(w, `{"error":"failed to initiate deposit"}`, http.StatusInternalServerError)
+			writeJSONError(w, "failed to initiate deposit", http.StatusInternalServerError)
 			return
 		}
 
@@ -124,13 +171,23 @@ func handleWithdrawInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := anchor.ClaimsFromContext(r.Context())
 		if !ok {
-			http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+			writeJSONError(w, "authentication required", http.StatusForbidden)
 			return
 		}
 
 		assetCode, account, amount, dest, err := parseWithdrawRequest(r)
 		if err != nil {
-			http.Error(w, `{"error":"invalid request format"}`, http.StatusBadRequest)
+			writeJSONError(w, "invalid request format", http.StatusBadRequest)
+			return
+		}
+
+		if strings.TrimSpace(assetCode) == "" {
+			writeJSONError(w, "asset_code is required", http.StatusBadRequest)
+			return
+		}
+
+		if !supportedAssets[assetCode] {
+			writeJSONError(w, "unsupported asset_code", http.StatusBadRequest)
 			return
 		}
 
@@ -139,9 +196,9 @@ func handleWithdrawInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 			account = claims.Subject
 		}
 
-		if strings.TrimSpace(assetCode) == "" {
-			http.Error(w, `{"error":"asset_code is required"}`, http.StatusBadRequest)
-			return
+		// Amount is optional for interactive withdrawals
+		if strings.TrimSpace(amount) == "" {
+			amount = "0"
 		}
 
 		req := anchor.WithdrawalRequest{
@@ -154,7 +211,7 @@ func handleWithdrawInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 
 		result, err := tm.InitiateWithdrawal(context.Background(), req)
 		if err != nil {
-			http.Error(w, `{"error":"failed to initiate withdrawal"}`, http.StatusInternalServerError)
+			writeJSONError(w, "failed to initiate withdrawal", http.StatusInternalServerError)
 			return
 		}
 
@@ -170,7 +227,7 @@ func handleWithdrawInteractive(tm *anchor.TransferManager) http.HandlerFunc {
 	}
 }
 
-// handleGetTransaction returns the status of a single transfer by ID.
+// handleGetTransaction returns the status of a single transfer by ID, stellar_transaction_id, or external_transaction_id.
 // Requires JWT authentication.
 func handleGetTransaction(tm *anchor.TransferManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -181,20 +238,34 @@ func handleGetTransaction(tm *anchor.TransferManager) http.HandlerFunc {
 		}
 
 		id := r.URL.Query().Get("id")
-		if strings.TrimSpace(id) == "" {
-			http.Error(w, `{"error":"id parameter is required"}`, http.StatusBadRequest)
+		stellarTxID := r.URL.Query().Get("stellar_transaction_id")
+		externalTxID := r.URL.Query().Get("external_transaction_id")
+
+		if strings.TrimSpace(id) == "" && strings.TrimSpace(stellarTxID) == "" && strings.TrimSpace(externalTxID) == "" {
+			http.Error(w, `{"error":"id, stellar_transaction_id, or external_transaction_id parameter is required"}`, http.StatusBadRequest)
 			return
 		}
 
-		status, err := tm.GetStatus(context.Background(), id)
-		if err != nil {
-			http.Error(w, `{"error":"transfer not found"}`, http.StatusNotFound)
+		// Lookup by id
+		if id != "" {
+			status, err := tm.GetStatus(context.Background(), id)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				json.NewEncoder(w).Encode(map[string]string{"error": "transfer not found"})
+				return
+			}
+			status.Status = mapStatusToSEP24(status.Status)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(sep24TransactionResponse{Transaction: status})
 			return
 		}
 
+		// For stellar_transaction_id or external_transaction_id, we need to search through transfers
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(status)
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "transfer not found"})
 	}
 }
 
@@ -209,6 +280,15 @@ func handleGetTransactions(store stellarconnect.TransferStore, baseURL string) h
 		}
 
 		assetCode := r.URL.Query().Get("asset_code")
+		kind := r.URL.Query().Get("kind")
+		limitStr := r.URL.Query().Get("limit")
+		noOlderThan := r.URL.Query().Get("no_older_than")
+
+		// Validate asset_code if provided
+		if assetCode != "" && !supportedAssets[assetCode] {
+			writeJSONError(w, "unsupported asset_code", http.StatusBadRequest)
+			return
+		}
 
 		filters := stellarconnect.TransferFilters{
 			Account: claims.Subject,
@@ -216,11 +296,43 @@ func handleGetTransactions(store stellarconnect.TransferStore, baseURL string) h
 		if strings.TrimSpace(assetCode) != "" {
 			filters.AssetCode = assetCode
 		}
+		if kind == "deposit" {
+			k := stellarconnect.KindDeposit
+			filters.Kind = &k
+		} else if kind == "withdrawal" {
+			k := stellarconnect.KindWithdrawal
+			filters.Kind = &k
+		}
 
 		transfers, err := store.List(context.Background(), filters)
 		if err != nil {
-			http.Error(w, `{"error":"failed to list transfers"}`, http.StatusInternalServerError)
+			writeJSONError(w, "failed to list transfers", http.StatusInternalServerError)
 			return
+		}
+
+		// Filter by no_older_than
+		if noOlderThan != "" {
+			if cutoff, err := time.Parse(time.RFC3339, noOlderThan); err == nil {
+				filtered := make([]*stellarconnect.Transfer, 0, len(transfers))
+				for _, t := range transfers {
+					if !t.CreatedAt.Before(cutoff) {
+						filtered = append(filtered, t)
+					}
+				}
+				transfers = filtered
+			}
+		}
+
+		// Sort by created_at descending
+		sort.Slice(transfers, func(i, j int) bool {
+			return transfers[i].CreatedAt.After(transfers[j].CreatedAt)
+		})
+
+		// Apply limit
+		if limitStr != "" {
+			if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(transfers) {
+				transfers = transfers[:limit]
+			}
 		}
 
 		// Convert Transfer objects to TransferStatusResponse objects
@@ -230,7 +342,7 @@ func handleGetTransactions(store stellarconnect.TransferStore, baseURL string) h
 			resp := &anchor.TransferStatusResponse{
 				ID:           transfer.ID,
 				Kind:         string(transfer.Kind),
-				Status:       string(transfer.Status),
+				Status:       mapStatusToSEP24(string(transfer.Status)),
 				MoreInfoURL:  moreInfo,
 				AmountIn:     transfer.Amount,
 				AmountOut:    transfer.Amount,
@@ -239,6 +351,11 @@ func handleGetTransactions(store stellarconnect.TransferStore, baseURL string) h
 				TxHash:       transfer.StellarTxHash,
 				ExternalTxID: transfer.ExternalRef,
 				Message:      transfer.Message,
+			}
+			if transfer.Kind == stellarconnect.KindDeposit {
+				resp.To = transfer.Account
+			} else if transfer.Kind == stellarconnect.KindWithdrawal {
+				resp.From = transfer.Account
 			}
 			responses = append(responses, resp)
 		}
@@ -250,6 +367,30 @@ func handleGetTransactions(store stellarconnect.TransferStore, baseURL string) h
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// handleMoreInfo serves the more_info_url page for a transaction.
+// No authentication required — this is a public info page.
+func handleMoreInfo(tm *anchor.TransferManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if id == "" {
+			http.Error(w, "missing transaction id", http.StatusBadRequest)
+			return
+		}
+
+		status, err := tm.GetStatus(context.Background(), id)
+		if err != nil {
+			http.Error(w, "transaction not found", http.StatusNotFound)
+			return
+		}
+		status.Status = mapStatusToSEP24(status.Status)
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "<html><body><h1>Transaction %s</h1><p>Status: %s</p><p>Kind: %s</p></body></html>",
+			status.ID, status.Status, status.Kind)
 	}
 }
 

@@ -119,6 +119,8 @@ type TransferStatusResponse struct {
 	MoreInfoURL  string     `json:"more_info_url"`
 	AmountIn     string     `json:"amount_in,omitempty"`
 	AmountOut    string     `json:"amount_out,omitempty"`
+	To           string     `json:"to,omitempty"`
+	From         string     `json:"from,omitempty"`
 	StartedAt    time.Time  `json:"started_at"`
 	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 	TxHash       string     `json:"stellar_transaction_id,omitempty"`
@@ -347,6 +349,12 @@ func (tm *TransferManager) GetStatus(ctx context.Context, transferID string) (*T
 		TxHash:       transfer.StellarTxHash,
 		ExternalTxID: transfer.ExternalRef,
 		Message:      transfer.Message,
+	}
+	// SEP-24: deposits require "to" (user's Stellar account), withdrawals require "from"
+	if transfer.Kind == stellarconnect.KindDeposit {
+		resp.To = transfer.Account
+	} else if transfer.Kind == stellarconnect.KindWithdrawal {
+		resp.From = transfer.Account
 	}
 	return resp, nil
 }

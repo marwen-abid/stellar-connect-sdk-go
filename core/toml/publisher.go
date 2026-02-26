@@ -50,6 +50,12 @@ func (p *Publisher) Render() string {
 			if curr.AnchorAssetType != "" {
 				fmt.Fprintf(&b, "anchor_asset_type=\"%s\"\n", curr.AnchorAssetType)
 			}
+			if curr.IsAssetAnchored {
+				b.WriteString("is_asset_anchored=true\n")
+			}
+			if curr.Desc != "" {
+				fmt.Fprintf(&b, "desc=\"%s\"\n", curr.Desc)
+			}
 			if curr.Description != "" {
 				fmt.Fprintf(&b, "description=\"%s\"\n", curr.Description)
 			}

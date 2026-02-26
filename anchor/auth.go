@@ -32,6 +32,7 @@ type AuthConfig struct {
 	NonceStore        stellarconnect.NonceStore
 	JWTIssuer         stellarconnect.JWTIssuer
 	JWTVerifier       stellarconnect.JWTVerifier
+	AccountFetcher    stellarconnect.AccountFetcher // Optional: enables account signer support
 }
 
 type AuthIssuer struct {
@@ -41,6 +42,7 @@ type AuthIssuer struct {
 	nonceStore        stellarconnect.NonceStore
 	jwtIssuer         stellarconnect.JWTIssuer
 	jwtVerifier       stellarconnect.JWTVerifier
+	accountFetcher    stellarconnect.AccountFetcher
 }
 
 func NewAuthIssuer(config AuthConfig) (*AuthIssuer, error) {
@@ -70,12 +72,17 @@ func NewAuthIssuer(config AuthConfig) (*AuthIssuer, error) {
 		nonceStore:        config.NonceStore,
 		jwtIssuer:         config.JWTIssuer,
 		jwtVerifier:       config.JWTVerifier,
+		accountFetcher:    config.AccountFetcher,
 	}, nil
 }
 
 func (a *AuthIssuer) CreateChallenge(ctx context.Context, account string) (string, error) {
 	if strings.TrimSpace(account) == "" {
 		return "", errors.NewAnchorError(errors.CHALLENGE_BUILD_FAILED, "account is required", nil)
+	}
+
+	if _, err := keypair.ParseAddress(account); err != nil {
+		return "", errors.NewAnchorError(errors.CHALLENGE_BUILD_FAILED, "invalid account address", err)
 	}
 
 	nonce, err := corecrypto.GenerateNonce(challengeNonceLength)
@@ -171,7 +178,7 @@ func (a *AuthIssuer) VerifyChallenge(ctx context.Context, challengeXDR string) (
 	if strings.TrimSpace(account) == "" {
 		return "", errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "first operation missing source account (client account)", nil)
 	}
-	if err := verifyClientSignature(tx, a.networkPassphrase, account); err != nil {
+	if err := verifyChallengeSignatures(ctx, tx, a.networkPassphrase, a.signer.PublicKey(), account, a.accountFetcher); err != nil {
 		return "", err
 	}
 
@@ -212,18 +219,24 @@ func (a *AuthIssuer) RequireAuth(next http.Handler) http.Handler {
 
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
 		if header == "" || !strings.HasPrefix(header, "Bearer ") {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"missing bearer token"}`))
 			return
 		}
 		token := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 		if token == "" {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"missing bearer token"}`))
 			return
 		}
 
 		claims, err := a.jwtVerifier.Verify(r.Context(), token)
 		if err != nil {
-			http.Error(w, "invalid token", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"invalid token"}`))
 			return
 		}
 
@@ -237,12 +250,55 @@ func ClaimsFromContext(ctx context.Context) (*stellarconnect.JWTClaims, bool) {
 	return claims, ok
 }
 
-func verifyClientSignature(tx *txnbuild.Transaction, networkPassphrase, account string) error {
-	kp, err := keypair.ParseAddress(account)
+func verifyChallengeSignatures(ctx context.Context, tx *txnbuild.Transaction, networkPassphrase, serverPublicKey, clientAccount string, fetcher stellarconnect.AccountFetcher) error {
+	serverKP, err := keypair.ParseAddress(serverPublicKey)
 	if err != nil {
-		return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "invalid account address", err)
+		return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "invalid server public key", err)
 	}
-	if len(tx.Signatures()) == 0 {
+
+	// Build the set of valid client signers and determine the threshold.
+	// If an AccountFetcher is provided, look up account signers from the network.
+	// Otherwise (or if the account is unfunded), fall back to master-key-only.
+	type clientSigner struct {
+		kp     keypair.KP
+		weight int32
+	}
+	var clientSigners []clientSigner
+	var medThreshold int32
+
+	if fetcher != nil {
+		signers, thresholds, fetchErr := fetcher.FetchSigners(ctx, clientAccount)
+		if fetchErr != nil {
+			// Account not found (unfunded) — per SEP-10, fall back to master key only
+			kp, err := keypair.ParseAddress(clientAccount)
+			if err != nil {
+				return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "invalid account address", err)
+			}
+			clientSigners = []clientSigner{{kp: kp, weight: 1}}
+			medThreshold = 0
+		} else {
+			medThreshold = int32(thresholds.Medium)
+			clientSigners = make([]clientSigner, 0, len(signers))
+			for _, s := range signers {
+				kp, err := keypair.ParseAddress(s.Key)
+				if err != nil {
+					continue // skip invalid signer keys
+				}
+				clientSigners = append(clientSigners, clientSigner{kp: kp, weight: s.Weight})
+			}
+		}
+	} else {
+		// No fetcher — legacy behavior: master key only, threshold 0
+		kp, err := keypair.ParseAddress(clientAccount)
+		if err != nil {
+			return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "invalid account address", err)
+		}
+		clientSigners = []clientSigner{{kp: kp, weight: 1}}
+		medThreshold = 0
+	}
+
+	sigs := tx.Signatures()
+	if len(sigs) == 0 {
 		return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "challenge transaction has no signatures", nil)
 	}
 
@@ -251,14 +307,49 @@ func verifyClientSignature(tx *txnbuild.Transaction, networkPassphrase, account 
 		return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "failed to hash challenge transaction", err)
 	}
 
-	for _, sig := range tx.Signatures() {
-		if sig.Hint != kp.Hint() {
+	serverSigned := false
+	var totalWeight int32
+	seenHints := make(map[[4]byte]bool)
+
+	for _, sig := range sigs {
+		// Reject duplicate signature hints
+		var hint [4]byte
+		copy(hint[:], sig.Hint[:])
+		if seenHints[hint] {
+			return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "duplicate signature detected", nil)
+		}
+		seenHints[hint] = true
+
+		// Check if this is the server's signature
+		if serverKP.Verify(hash[:], sig.Signature) == nil {
+			serverSigned = true
 			continue
 		}
-		if err := kp.Verify(hash[:], sig.Signature); err == nil {
-			return nil
+
+		// Check against registered client signers
+		matched := false
+		for _, cs := range clientSigners {
+			if cs.kp.Verify(hash[:], sig.Signature) == nil {
+				totalWeight += cs.weight
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "transaction has unrecognized signatures", nil)
 		}
 	}
 
-	return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "challenge transaction not signed by client", nil)
+	if !serverSigned {
+		return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "challenge transaction not signed by server", nil)
+	}
+	if totalWeight < medThreshold {
+		return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "challenge transaction not signed by client", nil)
+	}
+	// For unfunded accounts (medThreshold == 0), we still need at least one client signature
+	if medThreshold == 0 && totalWeight == 0 {
+		return errors.NewAnchorError(errors.CHALLENGE_VERIFY_FAILED, "challenge transaction not signed by client", nil)
+	}
+
+	return nil
 }
