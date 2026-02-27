@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stellar-connect/sdk-go/core/net"
-	"github.com/stellar-connect/sdk-go/errors"
+	"github.com/marwen-abid/anchor-sdk-go/core/net"
+	"github.com/marwen-abid/anchor-sdk-go/errors"
 )
 
 const (

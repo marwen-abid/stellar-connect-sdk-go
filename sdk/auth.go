@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	stellarconnect "github.com/stellar-connect/sdk-go"
-	"github.com/stellar-connect/sdk-go/errors"
+	stellarconnect "github.com/marwen-abid/anchor-sdk-go"
+	"github.com/marwen-abid/anchor-sdk-go/errors"
 )
 
 // Session represents an authenticated connection to a Stellar anchor.

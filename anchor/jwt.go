@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar-connect/sdk-go"
-	"github.com/stellar-connect/sdk-go/errors"
+	"github.com/marwen-abid/anchor-sdk-go"
+	"github.com/marwen-abid/anchor-sdk-go/errors"
 )
 
 // hmacJWT implements both JWTIssuer and JWTVerifier using HMAC-SHA256.

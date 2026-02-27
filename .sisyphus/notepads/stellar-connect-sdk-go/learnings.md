@@ -1,7 +1,7 @@
 # Learnings - Task 1: Project Scaffolding
 
 ## Completed
-- Initialized go.mod with module path `github.com/stellar-connect/sdk-go`
+- Initialized go.mod with module path `github.com/marwen-abid/anchor-sdk-go`
 - Go version automatically set to 1.25.4 (> 1.21 requirement ✓)
 - Created RFC-specified directory structure:
   - Root: errors, core, anchor, observer, signers, store, sdk, examples
@@ -11,7 +11,7 @@
 - Created doc.go placeholder files in all package directories
 
 ## Acceptance Criteria Met
-✓ go.mod has correct module path: `github.com/stellar-connect/sdk-go`
+✓ go.mod has correct module path: `github.com/marwen-abid/anchor-sdk-go`
 ✓ Go version is 1.25.4 (>= 1.21 required)
 ✓ All RFC-specified directories exist at correct paths
 ✓ All doc.go files present with proper package declarations
@@ -164,7 +164,7 @@ The build constraint must be the absolute first line for Go to recognize it corr
 - `context`: for cancellation and timeouts
 - `time`: for backoff and circuit breaker timing
 - `sync`: for circuit breaker mutex
-- `github.com/stellar-connect/sdk-go/errors`: for error wrapping
+- `github.com/marwen-abid/anchor-sdk-go/errors`: for error wrapping
 
 ### Build Verification
 ✓ `go build ./core/net` passes with exit code 0
@@ -773,10 +773,10 @@ This registry will be used by Task 15 (TransferManager) to notify anchors of tra
 - `context`: request context for cancellation
 - `encoding/json`: JSON request/response parsing
 - `flag`: CLI argument parsing for port
-- `github.com/stellar-connect/sdk-go/anchor`: AuthIssuer, NewHMACJWT
-- `github.com/stellar-connect/sdk-go/core/toml`: TOML Publisher
-- `github.com/stellar-connect/sdk-go/signers`: FromSecret signer
-- `github.com/stellar-connect/sdk-go/store/memory`: NewNonceStore
+- `github.com/marwen-abid/anchor-sdk-go/anchor`: AuthIssuer, NewHMACJWT
+- `github.com/marwen-abid/anchor-sdk-go/core/toml`: TOML Publisher
+- `github.com/marwen-abid/anchor-sdk-go/signers`: FromSecret signer
+- `github.com/marwen-abid/anchor-sdk-go/store/memory`: NewNonceStore
 
 ### Design Decisions
 1. **Hardcoded test values**: No config files - all values (secret keys, domain, network) hardcoded for simplicity
@@ -1180,7 +1180,7 @@ This registry will be used by Task 15 (TransferManager) to notify anchors of tra
 4. **No deadlocks**: Goroutine startup is non-blocking, server immediately continues
 
 ### Dependencies Used
-- `github.com/stellar-connect/sdk-go/observer` - HorizonObserver and AutoMatchPayments
+- `github.com/marwen-abid/anchor-sdk-go/observer` - HorizonObserver and AutoMatchPayments
 - Context: For observer.Start(context.Background())
 - Standard log package for startup logging
 

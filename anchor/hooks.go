@@ -5,7 +5,7 @@ package anchor
 import (
 	"sync"
 
-	stellarconnect "github.com/stellar-connect/sdk-go"
+	stellarconnect "github.com/marwen-abid/anchor-sdk-go"
 )
 
 // HookEvent represents a named lifecycle event that anchors can subscribe to.

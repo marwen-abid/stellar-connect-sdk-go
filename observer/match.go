@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/stellar-connect/sdk-go/anchor"
+	"github.com/marwen-abid/anchor-sdk-go/anchor"
 )
 
 // AutoMatchPayments automatically matches incoming Stellar payments to pending

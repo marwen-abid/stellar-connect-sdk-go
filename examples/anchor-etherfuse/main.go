@@ -21,12 +21,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar-connect/sdk-go/anchor"
-	"github.com/stellar-connect/sdk-go/core/account"
-	"github.com/stellar-connect/sdk-go/core/toml"
-	"github.com/stellar-connect/sdk-go/observer"
-	"github.com/stellar-connect/sdk-go/signers"
-	"github.com/stellar-connect/sdk-go/store/memory"
+	"github.com/marwen-abid/anchor-sdk-go/anchor"
+	"github.com/marwen-abid/anchor-sdk-go/core/account"
+	"github.com/marwen-abid/anchor-sdk-go/core/toml"
+	"github.com/marwen-abid/anchor-sdk-go/observer"
+	"github.com/marwen-abid/anchor-sdk-go/signers"
+	"github.com/marwen-abid/anchor-sdk-go/store/memory"
 )
 
 const jwtExpiry = 24 * time.Hour

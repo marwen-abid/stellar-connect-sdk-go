@@ -3,7 +3,7 @@ package signers
 import (
 	"context"
 
-	"github.com/stellar-connect/sdk-go"
+	"github.com/marwen-abid/anchor-sdk-go"
 )
 
 // callbackSigner wraps a custom signing function for external signing services.

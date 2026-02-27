@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	stellarconnect "github.com/stellar-connect/sdk-go"
+	stellarconnect "github.com/marwen-abid/anchor-sdk-go"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 )
 

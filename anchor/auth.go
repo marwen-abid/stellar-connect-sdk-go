@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar-connect/sdk-go"
-	corecrypto "github.com/stellar-connect/sdk-go/core/crypto"
-	"github.com/stellar-connect/sdk-go/errors"
+	"github.com/marwen-abid/anchor-sdk-go"
+	corecrypto "github.com/marwen-abid/anchor-sdk-go/core/crypto"
+	"github.com/marwen-abid/anchor-sdk-go/errors"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/txnbuild"
 )

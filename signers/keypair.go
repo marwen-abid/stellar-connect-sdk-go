@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stellar-connect/sdk-go"
+	"github.com/marwen-abid/anchor-sdk-go"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/txnbuild"
 )

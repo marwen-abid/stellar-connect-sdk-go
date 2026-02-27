@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	stellarconnect "github.com/stellar-connect/sdk-go"
+	stellarconnect "github.com/marwen-abid/anchor-sdk-go"
 )
 
 // nonceEntry represents a stored nonce with its expiration and consumption state.

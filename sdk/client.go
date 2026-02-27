@@ -3,8 +3,8 @@
 package sdk
 
 import (
-	"github.com/stellar-connect/sdk-go/core/net"
-	"github.com/stellar-connect/sdk-go/core/toml"
+	"github.com/marwen-abid/anchor-sdk-go/core/net"
+	"github.com/marwen-abid/anchor-sdk-go/core/toml"
 )
 
 // Client is the entry point for integrating with Stellar anchors.

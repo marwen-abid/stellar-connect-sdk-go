@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stellar-connect/sdk-go/errors"
+	"github.com/marwen-abid/anchor-sdk-go/errors"
 )
 
 // Default configuration values

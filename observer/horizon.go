@@ -10,7 +10,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon/operations"
 
-	"github.com/stellar-connect/sdk-go/errors"
+	"github.com/marwen-abid/anchor-sdk-go/errors"
 )
 
 // HorizonObserver implements Observer by streaming payment operations from Horizon.

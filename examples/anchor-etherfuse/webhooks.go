@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"strings"
 
-	stellarconnect "github.com/stellar-connect/sdk-go"
-	"github.com/stellar-connect/sdk-go/anchor"
+	stellarconnect "github.com/marwen-abid/anchor-sdk-go"
+	"github.com/marwen-abid/anchor-sdk-go/anchor"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 )

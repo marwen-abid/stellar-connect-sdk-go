@@ -9,8 +9,8 @@ package anchor
 import (
 	"fmt"
 
-	"github.com/stellar-connect/sdk-go"
-	"github.com/stellar-connect/sdk-go/errors"
+	"github.com/marwen-abid/anchor-sdk-go"
+	"github.com/marwen-abid/anchor-sdk-go/errors"
 )
 
 // legalTransitions defines the allowed state transitions for SEP-24 transfers.

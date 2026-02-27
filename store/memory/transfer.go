@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	stellarconnect "github.com/stellar-connect/sdk-go"
+	stellarconnect "github.com/marwen-abid/anchor-sdk-go"
 )
 
 // TransferStore is an in-memory implementation of stellarconnect.TransferStore.

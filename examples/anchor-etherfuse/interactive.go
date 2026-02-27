@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"html/template"
 	"log"
+	"math/big"
 	"net/http"
 
-	stellarconnect "github.com/stellar-connect/sdk-go"
-	"github.com/stellar-connect/sdk-go/anchor"
+	stellarconnect "github.com/marwen-abid/anchor-sdk-go"
+	"github.com/marwen-abid/anchor-sdk-go/anchor"
 )
 
 //go:embed templates/interactive.html
@@ -277,6 +278,11 @@ func handlePostQuote(
 			log.Printf("Failed to update transfer amount: %v", err)
 		}
 
+		destAmountAfterFee := quote.DestinationAmountAfterFee
+		if destAmountAfterFee == "" {
+			destAmountAfterFee = subtractDecimal(quote.DestinationAmount, quote.FeeAmount)
+		}
+
 		data := interactivePageData{
 			Token:         token,
 			Kind:          string(transfer.Kind),
@@ -286,7 +292,7 @@ func handlePostQuote(
 			ExchangeRate:  quote.ExchangeRate,
 			SourceAmount:  quote.SourceAmount,
 			DestAmount:    quote.DestinationAmount,
-			DestAmountFee: quote.DestinationAmountAfterFee,
+			DestAmountFee: destAmountAfterFee,
 			FeeAmount:     quote.FeeAmount,
 		}
 
@@ -427,6 +433,21 @@ func DeterministicQuoteID(transferID string) string {
 // DeterministicOrderID generates a deterministic UUID for an order from a transfer ID.
 func DeterministicOrderID(transferID string) string {
 	return uuidV5([16]byte{0x8d, 0xa7, 0xb8, 0x13, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, transferID)
+}
+
+// subtractDecimal computes a - b for decimal strings, returning a string.
+// Returns "0" if either input is invalid.
+func subtractDecimal(a, b string) string {
+	ra, ok := new(big.Rat).SetString(a)
+	if !ok {
+		return "0"
+	}
+	rb, ok := new(big.Rat).SetString(b)
+	if !ok {
+		return "0"
+	}
+	result := new(big.Rat).Sub(ra, rb)
+	return result.FloatString(7)
 }
 
 // renderError renders the template with an error message.

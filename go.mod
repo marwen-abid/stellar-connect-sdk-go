@@ -1,4 +1,4 @@
-module github.com/stellar-connect/sdk-go
+module github.com/marwen-abid/anchor-sdk-go
 
 go 1.25.4
 

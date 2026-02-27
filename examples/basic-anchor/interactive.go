@@ -8,7 +8,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/stellar-connect/sdk-go/anchor"
+	"github.com/marwen-abid/anchor-sdk-go/anchor"
 )
 
 //go:embed templates/interactive.html
